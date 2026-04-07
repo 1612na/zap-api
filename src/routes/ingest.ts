@@ -141,6 +141,26 @@ ingestRouter.post('/conversations', async (req: Request, res: Response, next: Ne
       rows.forEach((r) => existingContactIds.add(r.id));
     }
 
+    // Cria stubs mínimos para contact_ids ainda não existentes,
+    // preservando o vínculo mesmo antes do /ingest/contacts chegar.
+    const missingContactIds = candidateContactIds.filter((id) => !existingContactIds.has(id));
+    if (missingContactIds.length > 0) {
+      const now = Date.now();
+      const stubs = missingContactIds.map((id) => ({
+        id,
+        name: null as string | null,
+        push_name: null as string | null,
+        display_name: null as string | null,
+        is_business: false,
+        avatar_url: null as string | null,
+        about: null as string | null,
+        created_at: now,
+        updated_at: now,
+      }));
+      await db.insert(contacts).values(stubs).onConflictDoNothing();
+      missingContactIds.forEach((id) => existingContactIds.add(id));
+    }
+
     const values = unique.map((c) => ({
       id: c.id,
       contact_id:
