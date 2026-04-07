@@ -5,7 +5,8 @@ services:
     region: oregon
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: node dist/index.js
+    startCommand: node dist/src/index.js
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production

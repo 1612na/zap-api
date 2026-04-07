@@ -36,7 +36,12 @@ async function main(): Promise<void> {
       _next: express.NextFunction,
     ) => {
       console.error('[zap-api] Erro:', err);
-      const message = err instanceof Error ? err.message : 'Erro interno';
+      const message =
+        process.env['NODE_ENV'] === 'production'
+          ? 'Internal server error'
+          : err instanceof Error
+            ? err.message
+            : 'Erro interno';
       res.status(500).json({ error: message });
     },
   );

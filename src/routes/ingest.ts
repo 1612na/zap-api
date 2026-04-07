@@ -60,6 +60,10 @@ ingestRouter.post('/contacts', async (req: Request, res: Response, next: NextFun
       res.status(400).json({ error: 'data deve ser um array não vazio' });
       return;
     }
+    if (data.length > 500) {
+      res.status(400).json({ error: 'Máximo de 500 registros por lote' });
+      return;
+    }
 
     const values = data.map((c) => ({
       id: c.id,
@@ -106,6 +110,10 @@ ingestRouter.post('/conversations', async (req: Request, res: Response, next: Ne
       res.status(400).json({ error: 'data deve ser um array não vazio' });
       return;
     }
+    if (data.length > 500) {
+      res.status(400).json({ error: 'Máximo de 500 registros por lote' });
+      return;
+    }
 
     const values = data.map((c) => ({
       id: c.id,
@@ -148,6 +156,10 @@ ingestRouter.post('/messages', async (req: Request, res: Response, next: NextFun
     const { data } = req.body as { data: IngestMessage[] };
     if (!Array.isArray(data) || data.length === 0) {
       res.status(400).json({ error: 'data deve ser um array não vazio' });
+      return;
+    }
+    if (data.length > 500) {
+      res.status(400).json({ error: 'Máximo de 500 registros por lote' });
       return;
     }
 

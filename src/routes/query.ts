@@ -52,6 +52,7 @@ queryRouter.get('/summary', async (req: Request, res: Response, next: NextFuncti
         .select({
           id: conversations.id,
           is_group: conversations.is_group,
+          name: conversations.name,
           last_message_at: conversations.last_message_at,
           unread_count: conversations.unread_count,
           contact_id: conversations.contact_id,
@@ -108,6 +109,7 @@ queryRouter.get('/summary', async (req: Request, res: Response, next: NextFuncti
         return {
           conversation_id: row.id,
           type: row.is_group ? 'group' : 'individual',
+          name: row.name,
           contact,
           last_message_at: row.last_message_at
             ? new Date(row.last_message_at).toISOString()
@@ -260,6 +262,7 @@ queryRouter.get('/:id/full', async (req: Request, res: Response, next: NextFunct
     res.json({
       conversation_id: conv.id,
       type: conv.is_group ? 'group' : 'individual',
+      name: conv.name,
       contact,
       created_at: new Date(conv.created_at).toISOString(),
       last_message_at: conv.last_message_at
