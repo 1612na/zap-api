@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { requireApiKey } from './middleware/auth.js';
 import { ingestRouter } from './routes/ingest.js';
 import { queryRouter } from './routes/query.js';
@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   app.use(express.json({ limit: '2mb' }));
 
   // Health check público (sem auth) — usado pelo Render para verificar deploy
-  app.get('/health', (_req, res) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({ ok: true, ts: new Date().toISOString() });
   });
 
