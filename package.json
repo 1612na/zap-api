@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Render API — recebe dados do coletor WhatsApp e serve o CRM Manus",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20 <22" },
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
