@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { sql } from 'drizzle-orm';
+import { sql, inArray } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { contacts, conversations, messages } from '../db/schema.js';
 
@@ -49,6 +49,11 @@ interface IngestMessage {
   created_at: number;
 }
 
+/** Deduplica array pelo campo id, mantendo o último valor para cada chave. */
+function dedupeById<T extends { id: string }>(arr: T[]): T[] {
+  return [...new Map(arr.map((item) => [item.id, item])).values()];
+}
+
 // ---------------------------------------------------------------------------
 // POST /ingest/contacts
 // ---------------------------------------------------------------------------
@@ -65,7 +70,10 @@ ingestRouter.post('/contacts', async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    const values = data.map((c) => ({
+    // Deduplica para evitar "ON CONFLICT DO UPDATE cannot affect row a second time"
+    const unique = dedupeById(data);
+
+    const values = unique.map((c) => ({
       id: c.id,
       name: c.name,
       push_name: c.push_name,
@@ -93,7 +101,7 @@ ingestRouter.post('/contacts', async (req: Request, res: Response, next: NextFun
         },
       });
 
-    res.json({ accepted: data.length });
+    res.json({ accepted: unique.length });
   } catch (err) {
     next(err);
   }
@@ -115,9 +123,30 @@ ingestRouter.post('/conversations', async (req: Request, res: Response, next: Ne
       return;
     }
 
-    const values = data.map((c) => ({
+    // Deduplica pelo id
+    const unique = dedupeById(data);
+
+    // Verifica quais contact_ids realmente existem na tabela contacts.
+    // contact_ids ausentes são anulados para evitar FK violation.
+    const candidateContactIds = unique
+      .map((c) => c.contact_id)
+      .filter((id): id is string => id !== null);
+
+    const existingContactIds = new Set<string>();
+    if (candidateContactIds.length > 0) {
+      const rows = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(inArray(contacts.id, candidateContactIds));
+      rows.forEach((r) => existingContactIds.add(r.id));
+    }
+
+    const values = unique.map((c) => ({
       id: c.id,
-      contact_id: c.contact_id,
+      contact_id:
+        c.contact_id !== null && existingContactIds.has(c.contact_id)
+          ? c.contact_id
+          : null,
       name: c.name,
       is_group: c.is_group === 1,
       last_message_at: c.last_message_at,
@@ -132,7 +161,7 @@ ingestRouter.post('/conversations', async (req: Request, res: Response, next: Ne
       .onConflictDoUpdate({
         target: conversations.id,
         set: {
-          // Preservar contact_id se já existir e o novo for null
+          // Preservar contact_id já existente se o novo for null
           contact_id: sql`CASE WHEN excluded.contact_id IS NOT NULL THEN excluded.contact_id ELSE conversations.contact_id END`,
           last_message_at: sql`excluded.last_message_at`,
           unread_count: sql`excluded.unread_count`,
@@ -141,7 +170,7 @@ ingestRouter.post('/conversations', async (req: Request, res: Response, next: Ne
         },
       });
 
-    res.json({ accepted: data.length });
+    res.json({ accepted: unique.length });
   } catch (err) {
     next(err);
   }
@@ -163,7 +192,29 @@ ingestRouter.post('/messages', async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    const values = data.map((m) => ({
+    // Deduplica pelo id
+    const unique = dedupeById(data);
+
+    // Garante que todas as conversas referenciadas existem.
+    // Cria stubs mínimos para evitar FK violation — serão sobrescritos
+    // pelo /ingest/conversations quando chegar o payload completo.
+    const chatIds = [...new Set(unique.map((m) => m.chat_id))];
+    if (chatIds.length > 0) {
+      const now = Date.now();
+      const stubs = chatIds.map((id) => ({
+        id,
+        contact_id: null,
+        name: null,
+        is_group: false,
+        last_message_at: null as number | null,
+        unread_count: 0,
+        created_at: now,
+        updated_at: now,
+      }));
+      await db.insert(conversations).values(stubs).onConflictDoNothing();
+    }
+
+    const values = unique.map((m) => ({
       id: m.id,
       chat_id: m.chat_id,
       sender_jid: m.sender_jid,
@@ -185,7 +236,7 @@ ingestRouter.post('/messages', async (req: Request, res: Response, next: NextFun
       .values(values)
       .onConflictDoNothing(); // mensagem é imutável
 
-    res.json({ accepted: data.length });
+    res.json({ accepted: unique.length });
   } catch (err) {
     next(err);
   }
